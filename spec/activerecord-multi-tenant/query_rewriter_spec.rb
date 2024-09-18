@@ -111,6 +111,64 @@ describe 'Query Rewriter' do
     end
   end
 
+  context 'when bulk updating with group by and having clauses' do
+    let!(:account) { Account.create!(name: 'Test Account') }
+
+    it 'updates records with GROUP BY and HAVING clauses' do
+      # Create test data
+      Project.create(name: 'Project 1', account: account)
+      Project.create(name: 'Project 2', account: account)
+      Project.create(name: 'Project 3', account: account)
+
+      new_name = 'Updated Name'
+      having_condition = 'COUNT(id) > 1'
+      expected_query = <<-SQL
+        UPDATE
+          "projects"
+        SET
+          "name" = '#{new_name}'
+        WHERE
+          "projects"."id" IN (
+            SELECT
+              "projects"."id"
+            FROM
+              "projects"
+            WHERE "projects"."account_id" = #{account.id}
+              AND "projects"."account_id" IN (
+                SELECT
+                        "projects"."account_id"
+                    FROM
+                        "projects"
+                    WHERE
+                        "projects"."account_id" = #{account.id}
+                    GROUP BY
+                        "projects"."account_id"
+                    HAVING
+                        (
+                          #{having_condition}
+                        )
+              )
+          )
+          AND "projects"."account_id" = #{account.id}
+      SQL
+
+      expect do
+        MultiTenant.with(account) do
+          Project.group(:account_id).having(having_condition).update_all(name: new_name)
+        end
+      end.to change { Project.where(name: new_name).count }.from(0).to(3)
+
+      @queries.each do |actual_query|
+        next unless actual_query.include?('UPDATE "projects" SET "name"')
+
+        # Extract parameterized values and replace placeholders
+        actual_query = actual_query.gsub('$1', "'#{new_name}'")
+
+        expect(format_sql(actual_query).strip).to eq(format_sql(expected_query).strip)
+      end
+    end
+  end
+
   context 'when bulk deleting' do
     let!(:account) { Account.create!(name: 'Test Account') }
     let!(:project1) { Project.create(name: 'Project 1', account: account) }

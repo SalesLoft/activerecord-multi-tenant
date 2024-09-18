@@ -74,7 +74,30 @@ module Arel
 
       # Handle composite primary keys
       primary_keys = Array.wrap(table[primary_key].name).map { |key| table[key] }
-      subquery = subquery.project(*primary_keys)
+      subquery.project(*primary_keys)
+
+      group_values_arel_columns = arel_columns(group_values.uniq)
+
+      # Generate the subquery for group_values and having_clause
+      if group_values_arel_columns.any? || having_clause.present?
+        group_subquery = table
+                         .project(*group_values_arel_columns)
+                         .where(arel.constraints)
+                         .group(*group_values_arel_columns)
+        having_clause_ast = having_clause.ast unless having_clause.empty?
+        group_subquery.having(having_clause_ast) if having_clause_ast
+
+        # Handle multiple columns in the group_values_arel_columns
+        if group_values_arel_columns.size > 1
+          subquery.where(Arel::Nodes::Grouping.new(group_values_arel_columns).in(group_subquery))
+        else
+          subquery.where(group_values_arel_columns.first.in(group_subquery))
+        end
+
+        # Clear group_values and having_clause from the subquery
+        subquery.ast.cores.first.groups.clear
+        subquery.ast.cores.first.havings.clear
+      end
 
       # Create an IN condition node with the primary key of the table and the subquery
       if primary_keys.size > 1
