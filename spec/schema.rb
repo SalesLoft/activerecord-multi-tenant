@@ -133,6 +133,15 @@ ARGV.grep(/\w+_spec\.rb/).empty? && ActiveRecord::Schema.define(version: 1) do
     t.column :name, :string
   end
 
+  create_table :composite_key_models, id: false, force: true, partition_key: :account_id do |t|
+    t.integer :account_id
+    t.integer :secondary_id
+    t.string :name
+    t.timestamps
+  end
+
+  execute 'ALTER TABLE composite_key_models ADD PRIMARY KEY (account_id, secondary_id);'
+
   create_distributed_table :accounts, :id
   create_distributed_table :projects, :account_id
   create_distributed_table :managers, :account_id
@@ -149,6 +158,7 @@ ARGV.grep(/\w+_spec\.rb/).empty? && ActiveRecord::Schema.define(version: 1) do
   create_distributed_table :domains, :account_id
   create_distributed_table :pages, :account_id
   create_distributed_table :posts, :account_id
+  create_distributed_table :composite_key_models, :account_id
   create_reference_table :categories
 end
 
@@ -272,4 +282,13 @@ end
 class Page < ActiveRecord::Base
   multi_tenant :account
   belongs_to :domain
+end
+
+require 'composite_primary_keys'
+
+class CompositeKeyModel < ActiveRecord::Base
+  self.primary_keys = :account_id, :secondary_id
+  multi_tenant :account
+
+  validates_uniqueness_of :name, scope: %i[account_id secondary_id]
 end

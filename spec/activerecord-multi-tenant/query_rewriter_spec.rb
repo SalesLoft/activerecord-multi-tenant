@@ -310,6 +310,59 @@ describe 'Query Rewriter' do
     end
   end
 
+  context 'when bulk updating with composite primary key' do
+    let!(:account) { Account.create!(name: 'Test Account') }
+    let!(:composite_key_model1) { CompositeKeyModel.create(account_id: account.id, secondary_id: 1, name: 'Model 1') }
+    let!(:composite_key_model2) { CompositeKeyModel.create(account_id: account.id, secondary_id: 2, name: 'Model 2') }
+
+    it 'updates the records with composite primary key' do
+      expect do
+        MultiTenant.with(account) do
+          CompositeKeyModel.update_all(name: 'Updated Name')
+        end
+      end.to change { composite_key_model1.reload.name }.from('Model 1').to('Updated Name')
+                                                        .and change {
+                                                               composite_key_model2.reload.name
+                                                             }.from('Model 2').to('Updated Name')
+    end
+
+    it 'updates a limited number of records with composite primary key' do
+      limit = 1
+      expected_query = <<-SQL
+        UPDATE
+          "composite_key_models"
+        SET
+          "name" = 'Updated Name'
+        WHERE
+          ("composite_key_models"."account_id", "composite_key_models"."secondary_id") IN (
+            (
+              SELECT
+                "composite_key_models"."account_id", "composite_key_models"."secondary_id"
+              FROM
+                "composite_key_models"
+              WHERE
+                "composite_key_models"."account_id" = #{account.id} LIMIT #{limit}
+            )
+          )
+          AND "composite_key_models"."account_id" = #{account.id}
+      SQL
+
+      expect do
+        MultiTenant.with(account) do
+          CompositeKeyModel.limit(limit).update_all(name: 'Updated Name')
+        end
+      end.to change { CompositeKeyModel.where(name: 'Updated Name').count }.from(0).to(limit)
+
+      @queries.each do |actual_query|
+        next unless actual_query.include?('UPDATE "composite_key_models" SET "name"')
+
+        actual_query = actual_query.gsub('$1', "'Updated Name'").gsub('$2', limit.to_s)
+
+        expect(format_sql(actual_query).strip).to eq(format_sql(expected_query).strip)
+      end
+    end
+  end
+
   context 'when updating locked column in comments' do
     let!(:account) { Account.create!(name: 'Test Account') }
     let!(:comment1) { Comment.create!(account_id: account.id, commentable_id: 1, commentable_type: 'Post') }
