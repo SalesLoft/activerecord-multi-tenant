@@ -284,10 +284,8 @@ class Page < ActiveRecord::Base
   belongs_to :domain
 end
 
-require 'composite_primary_keys'
-
 class CompositeKeyModel < ActiveRecord::Base
-  self.primary_keys = :account_id, :secondary_id
+  self.primary_key = :account_id, :secondary_id
   multi_tenant :account
 
   validates_uniqueness_of :name, scope: %i[account_id secondary_id]
