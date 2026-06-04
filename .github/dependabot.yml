@@ -12,3 +12,5 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "chore(deps)"
+    reviewers:
+      - "clari/pde-developer-productivity"
