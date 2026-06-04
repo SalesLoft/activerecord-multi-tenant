@@ -1,0 +1,17 @@
+# Dependabot configuration - managed by DevX GHA upgrade initiative
+# Generated: 2026-06-04
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(deps)"
+    reviewers:
+      - "clari/pde-developer-productivity"
+    open-pull-requests-limit: 5
