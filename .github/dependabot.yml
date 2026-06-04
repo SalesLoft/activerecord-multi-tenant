@@ -14,3 +14,4 @@ updates:
       prefix: "chore(deps)"
     reviewers:
       - "clari/pde-developer-productivity"
+    open-pull-requests-limit: 5
